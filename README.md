@@ -44,7 +44,7 @@ List of commands that are supported:
 Run using `mach <option>`
 
 ### Example usage
-Change into a directory that contains a pipeline you want to set up, then run `mach sp`. MACH will check that the directory contains a pipeline and vars file, then it will pass off to fly using something like `fly -t ${MACHTARGET} sp -c ${PIPEFILE} -l ${VARSFILE} -p $(basename ${PWD})`
+Change into a directory that contains a pipeline you want to set up, then run `mach sp`. MACH will check that the directory contains a pipeline and vars file, then it will pass off to fly using something like `fly -t ${FLYTARGET} sp -c ${PIPEFILE} -l ${VARSFILE} -p $(basename ${PWD})`
 
 ### Set up
 Create a `.mach` file in the directory with your pipeline and vars
