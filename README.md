@@ -1,4 +1,4 @@
-# MACH - Faster Fly
+# MACH - Fly Faster
 ```
     __  ______   ________  __
    /  |/  /   | / ____/ / / /
