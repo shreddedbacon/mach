@@ -1,0 +1,4 @@
+FLYTARGET=example
+PIPELINE=pipeline-name
+PIPEFILE=ci/pipeline.yml
+VARSFILE=ci/vars.yml
