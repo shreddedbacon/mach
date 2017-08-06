@@ -1,0 +1,270 @@
+#!/bin/bash
+
+set -e
+#set -x
+
+cat << EOF
+    __  ______   ________  __
+   /  |/  /   | / ____/ / / /
+  / /|_/ / /| |/ /   / /_/ /
+ / /  / / ___ / /___/ __  /
+/_/  /_/_/  |_\____/_/ /_/
+=============================
+EOF
+
+FLYCMD=$1
+shift
+while getopts "t:p:j:r:" opt; do
+  case $opt in
+    t)
+      FLYTARGET=$OPTARG
+      ;;
+    p)
+      PIPELINE=$OPTARG
+      ;;
+    j)
+      PIPEJOB=$OPTARG
+      ;;
+    r)
+      RESOURCE=$OPTARG
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2
+      exit 1
+      ;;
+    :)
+      echo "Option -$OPTARG requires an argument." >&2
+      exit 1
+      ;;
+  esac
+done
+
+# Test for .mach file
+if [ -f $PWD/.mach ]
+then
+  source $PWD/.mach
+else
+  echo "No .mach file found, checking defaults"
+fi
+
+if [ -z $PIPELINE ]
+then
+  # If we haven't defined it using -p or inside .mach file then use the directory name
+  PIPELINE=$(basename $PWD)
+fi
+
+if [ -z $FLYTARGET ]
+then
+  # No target, eject
+  echo "No target specified, ejecting"
+  exit
+fi
+
+if [ -z $PIPEFILE ]
+then
+  if [ ! -f ci/pipeline.yml ]
+  then
+    # No pipeline, eject
+    echo "No pipeline file specified or found, ejecting"
+    exit
+  else
+    # Otherwise use a default
+    PIPEFILE=ci/pipeline.yml
+  fi
+fi
+
+if [ -z $VARSFILE ]
+then
+  if [ ! -f ci/vars.yml ]
+  then
+    # We don't need a vars file, so keep going if we don't
+    echo "No vars file specified or found, proceeding without"
+  else
+    # Otherwise use default
+    VARSFILE=ci/vars.yml
+  fi
+fi
+if [ ! -f $VARSFILE ]
+then
+  echo "${VARSFILE} defined, but doesn't exist, ejecting"
+  exit
+fi
+if [ ! -f $PIPEFILE ]
+then
+  echo "${PIPEFILE} defined, but doesn't exist, ejecting"
+  exit
+fi
+
+if [ -z $PIPELINE ]
+then
+  PIPELINE=$(basename $PWD)
+fi
+
+if [ -z $FLYTARGET ]
+then
+  echo "No target specified"
+fi
+
+#
+# Functions
+#
+###########################################################
+joblistfunc () {
+joblist=`python << EOF
+import yaml
+
+with open("${PIPEFILE}", "r") as stream:
+    try:
+        pipeline = yaml.load(stream)
+        for i in pipeline["jobs"]:
+            print i["name"]
+    except yaml.YAMLError as exc:
+        print(exc)
+EOF`
+
+if [ -z $PIPEJOB ]
+then
+  echo "Select which job, or exit-mach:"
+  COLUMNS=1
+  select opt in $(echo ${joblist} | tr -s " " "\n") "Q) exit-mach"
+  do
+    if [[ "$opt" == "Q) exit-mach" || $REPLY == [Qq] ]]; then
+      echo "Ejecting"
+			exit
+    fi
+    PIPEJOB=$opt
+    break
+  done
+fi
+}
+
+resourcelistfunc () {
+resourcelist=`python << EOF
+import yaml
+
+with open("${PIPEFILE}", "r") as stream:
+    try:
+        pipeline = yaml.load(stream)
+        for i in pipeline["resources"]:
+            print i["name"]
+    except yaml.YAMLError as exc:
+        print(exc)
+EOF`
+
+if [ -z $RESOURCE ]
+then
+  echo "Select which resource, or exit-mach:"
+  COLUMNS=1
+  select opt in $(echo ${resourcelist} | tr -s " " "\n") "Q) exit-mach"
+  do
+    if [[ "$opt" == "Q) exit-mach" || $REPLY == [Qq] ]]; then
+      echo "Ejecting"
+      exit
+    fi
+    RESOURCE=$opt
+    break
+  done
+fi
+}
+#
+#
+###########################################################
+
+# We have most of what we need, output what we are using
+
+echo "Using pipeline: ${PIPELINE}"
+echo "Pipeline file: ${PIPEFILE}"
+echo "Vars file: ${VARSFILE}"
+echo ""
+
+# Check the FLYCMD is in our list, otherwise exit on unsupported command
+case "${FLYCMD}" in
+  sp)
+    echo "Set pipeline $PIPELINE"
+    echo ""
+    if [ -z $VARSFILE ]
+    then
+      fly -t $FLYTARGET sp -c $PIPEFILE -p $PIPELINE
+    else
+      fly -t $FLYTARGET sp -c $PIPEFILE -l $VARSFILE -p $PIPELINE
+    fi
+    ;;
+  up)
+    echo "Unpause pipeline $PIPELINE"
+    echo ""
+    fly -t $FLYTARGET up -p $PIPELINE
+    ;;
+  dp)
+    echo "Destroy pipeline $PIPELINE"
+    echo ""
+    fly -t $FLYTARGET dp -p $PIPELINE
+    ;;
+  pp)
+    echo "Pause pipeline $PIPELINE"
+    echo ""
+    fly -t $FLYTARGET pp -p $PIPELINE
+    ;;
+  spup)
+    echo "Set pipeline $PIPELINE and unpause it"
+    echo ""
+    if [ -z $VARSFILE ]
+    then
+      fly -t $FLYTARGET sp -c $PIPEFILE -p $PIPELINE
+    else
+      fly -t $FLYTARGET sp -c $PIPEFILE -l $VARSFILE -p $PIPELINE
+    fi
+    fly -t $FLYTARGET up -p $PIPELINE
+    ;;
+  tj)
+    echo "Trigger job in $PIPELINE"
+    echo ""
+    joblistfunc
+    fly -t $FLYTARGET tj -j $PIPELINE/$PIPEJOB
+    ;;
+  w)
+    echo "Watch job in $PIPELINE"
+    echo ""
+		joblistfunc
+    fly -t $FLYTARGET w -j $PIPELINE/$PIPEJOB
+    ;;
+  tjw)
+    echo "Trigger job in $PIPELINE and watch it"
+    echo ""
+    joblistfunc
+    fly -t $FLYTARGET tj -j $PIPELINE/$PIPEJOB
+    fly -t $FLYTARGET w -j $PIPELINE/$PIPEJOB
+    ;;
+  pj)
+    echo "Pause job in $PIPELINE"
+    echo ""
+    joblistfunc
+    fly -t $FLYTARGET pj -j $PIPELINE/$PIPEJOB
+    ;;
+  uj)
+    echo "Unpause job in $PIPELINE"
+    echo ""
+    joblistfunc
+    fly -t $FLYTARGET tj -j $PIPELINE/$PIPEJOB
+    ;;
+  cr)
+    echo "Check resource in $PIPELINE"
+    echo ""
+    resourcelistfunc
+    fly -t $FLYTARGET cr -r $PIPELINE/$RESOURCE
+    ;;
+  pr)
+    echo "Pause resource in $PIPELINE"
+    echo ""
+    resourcelistfunc
+    fly -t $FLYTARGET pr -r $PIPELINE/$RESOURCE
+    ;;
+  ur)
+    echo "Unpause resource in $PIPELINE"
+    echo ""
+		resourcelistfunc
+    fly -t $FLYTARGET ur -r $PIPELINE/$RESOURCE
+    ;;
+  *)
+    echo "Unsupported command"
+    ;;
+esac
