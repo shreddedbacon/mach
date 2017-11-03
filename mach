@@ -215,6 +215,11 @@ case "${FLYCMD}" in
     fi
     fly -t $FLYTARGET up -p $PIPELINE
     ;;
+  ep)
+    echo "Expose pipeline $PIPELINE"
+    echo ""
+    fly -t $FLYTARGET ep -p $PIPELINE
+    ;;
   tj)
     echo "Trigger job in $PIPELINE"
     echo ""
