@@ -110,18 +110,7 @@ fi
 #
 ###########################################################
 joblistfunc () {
-joblist=`python << EOF
-import yaml
-
-with open("${PIPEFILE}", "r") as stream:
-    try:
-        pipeline = yaml.load(stream)
-        for i in pipeline["jobs"]:
-            print i["name"]
-    except yaml.YAMLError as exc:
-        print(exc)
-EOF`
-
+joblist=$(fly -t $FLYTARGET jobs -p $1 | awk '{print $1}')
 if [ -z $PIPEJOB ]
 then
   echo "Select which job, or exit-mach:"
@@ -130,7 +119,7 @@ then
   do
     if [[ "$opt" == "Q) exit-mach" || $REPLY == [Qq] ]]; then
       echo "Ejecting"
-			exit
+      exit
     fi
     PIPEJOB=$opt
     break
@@ -223,32 +212,32 @@ case "${FLYCMD}" in
   tj)
     echo "Trigger job in $PIPELINE"
     echo ""
-    joblistfunc
+    joblistfunc $PIPELINE
     fly -t $FLYTARGET tj -j $PIPELINE/$PIPEJOB
     ;;
   w)
     echo "Watch job in $PIPELINE"
     echo ""
-		joblistfunc
+    joblistfunc $PIPELINE
     fly -t $FLYTARGET w -j $PIPELINE/$PIPEJOB
     ;;
   tjw)
     echo "Trigger job in $PIPELINE and watch it"
     echo ""
-    joblistfunc
+    joblistfunc $PIPELINE
     fly -t $FLYTARGET tj -j $PIPELINE/$PIPEJOB
     fly -t $FLYTARGET w -j $PIPELINE/$PIPEJOB
     ;;
   pj)
     echo "Pause job in $PIPELINE"
     echo ""
-    joblistfunc
+    joblistfunc $PIPELINE
     fly -t $FLYTARGET pj -j $PIPELINE/$PIPEJOB
     ;;
   uj)
     echo "Unpause job in $PIPELINE"
     echo ""
-    joblistfunc
+    joblistfunc $PIPELINE
     fly -t $FLYTARGET uj -j $PIPELINE/$PIPEJOB
     ;;
   cr)
